@@ -1,50 +1,40 @@
-import openai
-import re
+import os
 import json
+import traceback
+from openai import OpenAI
+from dotenv import load_dotenv
 
-openai.api_key = "sk-your-openai-key"  # Replace with your real key or use env var
+load_dotenv()
 
-def summarize_entities(entities):
-    summary = []
-    for e in entities:
-        name = e["attributes"].get("friendly_name", e["entity_id"])
-        summary.append(f"{name} ({e['entity_id']})")
-    return "\n".join(summary[:50])
+client = OpenAI(
+    api_key=os.getenv("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 ")
+)
 
-def ask_gpt(user_input, entities):
-    entity_summary = summarize_entities(entities)
-
-    prompt = f"""
-You are Jarvis, a smart home assistant. Here are the user's current Home Assistant devices:
-{entity_summary}
-
-The user said: \"{user_input}\"
-
-Respond in JSON like this:
-{{
-  \"intent\": \"turn_on\",
-  \"entity\": \"light.kitchen_ceiling\",
-  \"data\": {{ }},
-  \"response\": \"Turning on the kitchen light.\"
-}}
-
-If unsure, only reply with:
-{{ \"response\": \"I'm not sure how to help with that.\" }}
-"""
-
-    res = openai.ChatCompletion.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": "You are a helpful smart home assistant."},
-            {"role": "user", "content": prompt}
-        ]
+def ask_gpt(text, entities):
+    entity_names = [e["entity_id"] for e in entities]
+    prompt = (
+        f"You are a smart home assistant. The user said: '{text}'. "
+        f"Available devices: {', '.join(entity_names)}.\n\n"
+        f"Respond with a JSON object like this:\n"
+        f'{{"entity": "light.kitchen", "intent": "turn_on", "response": "Turning on the kitchen light."}}\n\n'
+        f"Only include known entities."
     )
 
-    content = res.choices[0].message["content"]
-
     try:
-        match = re.search(r"{.*}", content, re.DOTALL)
-        parsed = json.loads(match.group()) if match else {"response": content.strip()}
-        return parsed
+        chat_response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You help interpret smart home voice commands."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3
+        )
+
+        reply = chat_response.choices[0].message.content
+        return json.loads(reply)
     except Exception as e:
-        return {"response": f"Parsing error: {e}"}
+        return {
+            "response": f"Failed to understand the command: {str(e)}",
+            "debug_prompt": prompt,
+            "traceback": traceback.format_exc()
+        }

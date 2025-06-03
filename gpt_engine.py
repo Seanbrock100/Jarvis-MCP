@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 client = OpenAI(
-    api_key=os.getenv("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 ")
+    api_key=os.getenv("OPENAI_API_KEY")
 )
 
 def ask_gpt(text, entities):
